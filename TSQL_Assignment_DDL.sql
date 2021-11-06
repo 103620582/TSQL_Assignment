@@ -586,7 +586,32 @@ GO
 CREATE PROCEDURE ADD_LOCATION
     @PLOCCODE NVARCHAR,
     @PMINQTY INT,
-    @PMACQTY INT
+    @PMAXQTY INT
 
 AS
 
+BEGIN
+    BEGIN TRY
+        IF LEN(@PLOCCODE) != 5
+            THROW 50190, 'Location code length invalid', 1
+        IF @PMINQTY < 0
+            THROW 50200, 'Minimum Qty out of range', 1
+        IF @PMAXQTY > 999
+            THROW 50210, 'Maximum Qty out of range', 1
+        IF @PMAXQTY >= @PMINQTY
+            THROW 50220, 'Minimum Qty larger than Maximum Qty', 1
+        
+        INSERT INTO LOCATION (LOCID, MINQTY, MAXQTY)
+        VALUES (@PLOCCODE, @PMINQTY, @PMINQTY)
+    END TRY
+
+    BEGIN CATCH
+        IF ERROR_MESSAGE() = 2627
+            THROW 50180, 'Duplicate customer ID', 1
+        ELSE
+            BEGIN
+                DECLARE @ERRORMESSAGE NVARCHAR(MAX) = ERROR_MESSAGE();
+                THROW 50000, @ERRORMESSAGE, 1
+            END
+    END CATCH
+END;
