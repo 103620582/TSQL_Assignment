@@ -1,6 +1,7 @@
 -- tim's server --
 
--- USE JoyAssignment
+-- CREATE DATABASE TSQLL;
+-- USE TSQLL;
 
 -- SELECT name, database_id, create_date 
 -- FROM sys.databases;
@@ -12,6 +13,7 @@
 
 -- GO
 
+-- SELECT * FROM CUSTOMER;
 
 
 IF OBJECT_ID('Sale') IS NOT NULL
@@ -238,7 +240,10 @@ END;
 GO
 
 INSERT INTO CUSTOMER (CUSTID, CUSTNAME, STATUS, SALES_YTD)
-VALUES (666, 'FRANK OCEAN', 'M.I.A', 50)
+VALUES (66, 'FRANK OCEAN', 'M.I.A', 50)
+
+DELETE FROM CUSTOMER
+WHERE @CUSTID = 666;
 
 SELECT * FROM CUSTOMER;
 
@@ -392,7 +397,7 @@ AS
 BEGIN
     BEGIN TRY
         IF @PSTATUS <> 'OK' AND @PSTATUS <> 'SUSPEND'
-            THROW 50120, 'Invalid status value', 1
+            THROW 50130, 'Invalid status value', 1
             UPDATE CUSTOMER SET STATUS = @PSTATUS
             WHERE CUSTID = @PCUSTID;
     END TRY
@@ -408,8 +413,59 @@ BEGIN
     END CATCH
 END;
 
-EXEC UPD_CUSTOMER_STATUS @PCUSTID = 666, @PSTATUS = 'OK';
+EXEC UPD_CUSTOMER_STATUS @PCUSTID = 666, @PSTATUS = 'MIA';
 SELECT * FROM CUSTOMER;
 
 GO
 
+-- ADD_SIMPLE_SALE ------
+
+IF OBJECT_ID('ADD_SIMPLE_SALE') IS NOT NULL
+DROP PROCEDURE ADD_SIMPLE_SALE
+
+GO
+
+CREATE PROCEDURE ADD_SIMPLE_SALE
+    @PCUSTID INT,
+    @PPRODID INT,
+    @PQTY INT
+AS
+
+BEGIN
+    BEGIN TRY
+        DECLARE @PRICE MONEY,
+                @YTDTOTAL MONEY
+
+        IF @PQTY < 1 OR @PQTY > 999
+            THROW 50140, 'Sale quantity outside valid range', 1
+        
+        IF (SELECT STATUS FROM CUSTOMER WHERE CUSTID = @PCUSTID) != 'OK'
+            THROW 50150, 'Customer status is not OK', 1
+
+        IF NOT EXISTS (SELECT * FROM CUSTOMER WHERE CUSTID = @PCUSTID)
+            THROW 50160, 'Customer ID not found', 1
+        
+        IF NOT EXISTS (SELECT * FROM PRODUCT WHERE PRODID = @PPRODID)
+            THROW 50170, 'Product ID not found', 1
+    
+    SELECT @PRICE = SELLING_PRICE
+    FROM PRODUCT
+    WHERE PRODID = @PPRODID
+
+    SET @YTDTOTAL = @PQTY * @PRICE
+
+    EXEC UPD_CUST_SALESYTD @PCUSTID = @PCUSTID, @PAMT = @PQTY;
+    EXEC UPD_PROD_SALESYTD @PPRODID = @PPRODID, @PAMT = @PQTY;
+
+    END TRY
+    
+    BEGIN CATCH
+        IF @@ROWCOUNT = 0
+            THROW 50120, 'Customer ID not found', 1
+            ELSE
+                BEGIN
+                    DECLARE @ERRORMESSAGE NVARCHAR(MAX) = ERROR_MESSAGE();
+                    THROW 50000, @ERRORMESSAGE, 1
+                END;
+    END CATCH
+END;
